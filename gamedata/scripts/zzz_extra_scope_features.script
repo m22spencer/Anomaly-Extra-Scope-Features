@@ -28,13 +28,23 @@ function active_2d_scope()
         if zoomtype == 0 then
             local scope = utils_item.get_attached_scope(item)
             if scope then
-                return { max_magnification = scope_zoom_factor_to_magnification(ini_sys:r_float_ex(scope, "scope_zoom_factor"))
-                       , dynamic_zoom      = ini_sys:r_float_ex(scope, "scope_dynamic_zoom") }
+                local zf = ini_sys:r_float_ex(scope, "scope_zoom_factor")
+                if zf and zf > 0 then 
+                    return { max_magnification = scope_zoom_factor_to_magnification(zf)
+                        , dynamic_zoom      = ini_sys:r_float_ex(scope, "scope_dynamic_zoom") }
+                else
+                    return nil
+                end
             else
                 local section = item:section()
                 local id = item:id()
-                return { max_magnification = scope_zoom_factor_to_magnification(utils_item.get_param(section, id, "scope_zoom_factor", "float"))
-                       , dynamic_zoom      = utils_item.get_param(section, id, "scope_dynamic_zoom", "bool") }
+                local zf = utils_item.get_param(section, id, "scope_zoom_factor", "float")
+                if zf and zf > 0 then 
+                    return { max_magnification = scope_zoom_factor_to_magnification(zf)
+                           , dynamic_zoom      = utils_item.get_param(section, id, "scope_dynamic_zoom", "bool") }
+                else
+                    return nil
+                end
             end
         else
             -- grenade launcher or alternate sight
@@ -43,7 +53,7 @@ function active_2d_scope()
     end
 end
 
-local config_max_pip_magnification = 2.0
+local config_max_pip_magnification = 12.0
 
 function actor_on_update() 
     local info = active_2d_scope()
@@ -83,7 +93,7 @@ function on_game_start()
     -- Compatibility patches
     if scopes_as_binocs then
         -- sets the zoom factor, which overrides our fixes
-        UnregisterScriptCallback("actor_on_update", scopes_as_binocs.actor_on_update)
+        scopes_as_binocs.actor_on_update = function() end
     end
 
 	RegisterScriptCallback("actor_on_update", actor_on_update)
