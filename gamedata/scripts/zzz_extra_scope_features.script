@@ -58,8 +58,7 @@ end
 
 local config_max_pip_magnification = 4.0
 
-local zoom_level = 1
-
+local zoom_cache = {}
 
 function actor_on_update() 
     local info = active_2d_scope()
@@ -67,7 +66,8 @@ function actor_on_update()
     local item = db.actor:active_item()
     local weapon = item and item:cast_Weapon()
     if info and item and weapon then 
-        local magnification = zoom_level * (info.max_magnification - 1) + 1
+
+        local magnification = (info.dynamic_zoom and zoom_cache[item:id()] or 1) * (info.max_magnification - 1) + 1
 
         local pip_magnification = math.min( magnification
                                           , config_max_pip_magnification)
@@ -103,7 +103,8 @@ function on_mouse_wheel(scroll_dir, flags)
 
         local scroll_delta = scroll_dir * 2 - 1;
 
-        zoom_level = clamp(zoom_level + scroll_delta * zoom_step, 0, 1)
+        local item = db.actor:active_item()
+        zoom_cache[item:id()] = clamp((zoom_cache[item:id()] or 0) + scroll_delta * zoom_step, 0, 1)
         flags.ret_value = false
     end
 end
