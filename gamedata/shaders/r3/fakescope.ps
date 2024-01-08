@@ -59,7 +59,7 @@ float4 main(p_screen I,  float4 pos2d : SV_POSITION) : SV_Target
 		
 		if(step(distToCenter, fakescope_params3.x) == 1 && m_hud_params.x >= 1.0)
 		{
-			I.tc0 = (I.tc0 - 0.5) * scope_factor - 0.5;
+			I.tc0 = (I.tc0 - 0.5) * scope_factor + 0.5;
 			
 			image.r = s_image.Sample(smp_base, I.tc0 + (float3(-chromatic_abberation, 0, 0) * distToCenter)).r;
 			image.b = s_image.Sample(smp_base, I.tc0 + (float3( chromatic_abberation, 0, 0) * distToCenter)).b;
@@ -67,9 +67,13 @@ float4 main(p_screen I,  float4 pos2d : SV_POSITION) : SV_Target
 
 			//fixme: texture coordinates are wrong for blur sample
 			//image = lerp(image, half_res_blur, inner_blur);
+
+			// Don't sample from outside framebuffer
+			float2 o = step(1, abs(I.tc0 * 2.0 - 1.0));
+			image.rgb *= 1 - max(o.x, o.y);
 			
-			image.rgb *= getparallax(distToParallax)
-					  * (I.tc0.y < 0.0 || I.tc0.y > 1.0 ? 1.0 : 0.0);  //Don't sample outside texture (inverted magnification)
+			image.rgb *= getparallax(distToParallax);
+					  //* (oov < 0.0 || oov > 1.0 ? 0.0 : 1.0);  //Don't sample outside texture (inverted magnification)
 		}
 		else
 		{	
