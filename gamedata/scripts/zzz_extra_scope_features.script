@@ -95,7 +95,12 @@ function actor_on_update()
         local fov_mag_error_approx = mag_between_fovs(device().fov, zoomfactor_to_fov(zoom_factor))
         scope_factor = 1/(pip_magnification * fov_mag_error_approx)
 
-        exec_console_cmd("scope_factor " .. clamp(scope_factor, 0.001, 1.0))
+        -- To retain correct mouse sensitivity we encode a mag value <1 as 0.99MMMM
+        local encoded = (scope_factor > 1)
+            and (scope_factor / 1000 + 0.99)
+            or  (scope_factor * 0.99)
+
+        exec_console_cmd("scope_factor " .. encoded)
         weapon:SetZoomFactor(zoom_factor)
 
         if false then 
