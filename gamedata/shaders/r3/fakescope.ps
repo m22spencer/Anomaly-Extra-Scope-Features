@@ -14,20 +14,24 @@ float getparallax(float d)
 	return clamp(1 - pow(1 / fakescope_params3.x * fakescope_params3.y * d, fakescope_params3.z), 0, 1);
 }
 
-
-
 float2 clampMagnitude(float2 v, float l)
 {
 	return normalize(v) * min(length(v), l);
 }
 
+float2 fake_outer_parallax(float2 tc, float factor) 
+{
+	float2 ndc = tc * 2.0 - 1.0;
+	float scl = ndc * factor + (sign(ndc.x) * (1.0-factor));
+	float tcx = scl * 0.5 + 0.5;
+	return float2(tcx, tc.y);
+}
+
 float4 main(p_screen I,  float4 pos2d : SV_POSITION) : SV_Target
 {
 	float scope_factor = fakescope_params1.x;
-
-	// Scale effects based on scope_factor to keep them consistent
-	fakescope_params2 *= scope_factor;
-	fakescope_params1.y *= scope_factor;
+	float inner_blur = fakescope_params1.y * scope_factor;
+	float chromatic_abberation = fakescope_params2.x * scope_factor;
 
 	if(m_hud_params.x > 0 && fakescope_params3.x > 0)
 	{
@@ -52,17 +56,23 @@ float4 main(p_screen I,  float4 pos2d : SV_POSITION) : SV_Target
 		{
 			I.tc0 = (I.tc0 - 0.5) * fakescope_params1.x - 0.5;
 			
-			image.r = s_image.Sample(smp_base, I.tc0 + (float3(-fakescope_params2.x, 0, 0) * distToCenter)).r;
-			image.b = s_image.Sample(smp_base, I.tc0 + (float3( fakescope_params2.x, 0, 0) * distToCenter)).b;
+			image.r = s_image.Sample(smp_base, I.tc0 + (float3(-chromatic_abberation, 0, 0) * distToCenter)).r;
+			image.b = s_image.Sample(smp_base, I.tc0 + (float3( chromatic_abberation, 0, 0) * distToCenter)).b;
 			image.g = s_image.Sample(smp_base, I.tc0).g;
 
-			image = lerp(image, half_res_blur, fakescope_params1.y);
+			image = lerp(image, half_res_blur, inner_blur);
 			
 			image.rgb *= getparallax(distToParallax);
 		}
 		else
 		{	
-			image = s_image.Sample(smp_base, I.tc0).xyz;
+			//*
+			float2 tc = fake_outer_parallax(I.tc0, .90);
+			/*/
+			float2 tc = I.tc0;
+			//*/
+		
+			image = s_image.Sample(smp_base, tc).xyz;
 			image = lerp(image, half_res_blur, m_hud_params.x * fakescope_params1.z) * (1 - (m_hud_params.x * (1 - fakescope_params1.w)));
 		}
 		
