@@ -66,11 +66,14 @@ float4 main(p_screen I,  float4 pos2d : SV_POSITION) : SV_Target
 		}
 		else
 		{	
-			//*
+			/*
+			// Effect needs to occur during fov change, or it looks weird.
 			float2 tc = fake_outer_parallax(I.tc0, .90);
+			tc = lerp(I.tc0, tc, m_hud_params.x);
 			/*/
 			float2 tc = I.tc0;
 			//*/
+
 		
 			image = s_image.Sample(smp_base, tc).xyz;
 			image = lerp(image, half_res_blur, m_hud_params.x * fakescope_params1.z) * (1 - (m_hud_params.x * (1 - fakescope_params1.w)));
