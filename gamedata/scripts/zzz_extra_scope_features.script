@@ -92,8 +92,6 @@ function actor_on_update()
                 .. " scope_factor: " .. scope_factor
                 )
         end
-    else
-        printf("no scope")
     end
 end
 
