@@ -1,0 +1,90 @@
+-- patch to change the conversion of scope config information
+function scope_zoom_factor_to_magnification(szf)
+    return 60 / szf
+end
+
+local to_rads = 3.14159 / 180
+local to_degs = 1 / to_rads
+
+function mag_to_fov(fov, mag)
+	return (2 * math.atan( math.tan(fov*to_rads/2) * (1/mag) )) * to_degs
+end
+
+-- TODO: reverse the formula in xray-monolith to double check. This seems to work though
+function fov_to_zoomfactor(fov)
+	return fov / 0.75
+end
+
+function zoomfactor_to_fov(zf)
+	return zf * 0.75
+end
+
+function active_2d_scope()
+    local item = db.actor:active_item()
+    local weapon = item and item:cast_Weapon()
+    if weapon then 
+        local zoomtype = weapon:GetZoomType()
+
+        if zoomtype == 0 then
+            local scope = utils_item.get_attached_scope(item)
+            if scope then
+                return { max_magnification = scope_zoom_factor_to_magnification(ini_sys:r_float_ex(scope, "scope_zoom_factor"))
+                       , dynamic_zoom      = ini_sys:r_float_ex(scope, "scope_dynamic_zoom") }
+            else
+                local section = item:section()
+                local id = item:id()
+                return { max_magnification = scope_zoom_factor_to_magnification(utils_item.get_param(section, id, "scope_zoom_factor", "float"))
+                       , dynamic_zoom      = utils_item.get_param(section, id, "scope_dynamic_zoom", "bool") }
+            end
+        else
+            -- grenade launcher or alternate sight
+            return nil
+        end
+    end
+end
+
+local config_max_pip_magnification = 2.0
+
+function actor_on_update() 
+    local info = active_2d_scope()
+
+    local item = db.actor:active_item()
+    local weapon = item and item:cast_Weapon()
+    if info and item and weapon then 
+        local magnification = info.max_magnification
+
+        local pip_magnification = math.min( magnification
+                                          , config_max_pip_magnification)
+
+        local remaining_magnification = magnification / pip_magnification
+
+
+        local fov_factor = mag_to_fov( get_console():get_float("fov")
+                                     , remaining_magnification)
+
+        local zoom_factor  = fov_to_zoomfactor(fov_factor)
+        local scope_factor = 1/pip_magnification
+
+        exec_console_cmd("scope_factor " .. scope_factor)
+        weapon:SetZoomFactor(zoom_factor)
+
+        printf( " mag: " .. magnification .. "x"
+             .. " pip: " .. pip_magnification .. "x"
+             .. " zoom: " .. remaining_magnification .. "x"
+             .. " zoom_factor: " .. zoom_factor
+             .. " scope_factor: " .. scope_factor
+              )
+    else
+        printf("no scope")
+    end
+end
+
+function on_game_start()
+    -- Compatibility patches
+    if scopes_as_binocs then
+        -- sets the zoom factor, which overrides our fixes
+        UnregisterScriptCallback("actor_on_update", scopes_as_binocs.actor_on_update)
+    end
+
+	RegisterScriptCallback("actor_on_update", actor_on_update)
+end
