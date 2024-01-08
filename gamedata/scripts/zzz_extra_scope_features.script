@@ -92,7 +92,9 @@ function actor_on_update()
         local scope_factor = 1/pip_magnification
 
         -- attempt to correct the zoom over time by modifying the scope_factor
-        local fov_mag_error_approx = mag_between_fovs(device().fov, zoomfactor_to_fov(zoom_factor))
+        local guess_device_fov = device().fov
+
+        local fov_mag_error_approx = mag_between_fovs(guess_device_fov, zoomfactor_to_fov(zoom_factor))
         scope_factor = 1/(pip_magnification * fov_mag_error_approx)
 
         -- To retain correct mouse sensitivity we encode a mag value <1 as 0.99MMMM
