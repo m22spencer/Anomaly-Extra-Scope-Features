@@ -6,8 +6,18 @@ end
 local to_rads = 3.14159 / 180
 local to_degs = 1 / to_rads
 
-function mag_to_fov(fov, mag)
-	return (2 * math.atan( math.tan(fov*to_rads/2) * (1/mag) )) * to_degs
+-- conversions -------------------------------------------------------------------------
+-- FIXME: these are not quite correct, need to dig through xray-monolith project
+function mag_to_fov(cur_fov, mag)
+	return (2 * math.atan( math.tan(cur_fov*to_rads/2) * (1/mag) )) * to_degs
+end
+
+-- x and y are in degrees
+function mag_between_fovs(x, y)
+    x = x * to_rads
+    y = y * to_rads
+
+    return 1 / (math.tan(y/2) / math.tan(x/2))
 end
 
 -- TODO: reverse the formula in xray-monolith to double check. This seems to work though
@@ -18,6 +28,7 @@ end
 function zoomfactor_to_fov(zf)
 	return zf * 0.75
 end
+-- end conversions
 
 function active_2d_scope()
     local item = db.actor:active_item()
@@ -56,7 +67,7 @@ function active_2d_scope()
     end
 end
 
-local config_max_pip_magnification = 4.0
+local config_max_pip_magnification = 2.0
 
 local zoom_cache = {}
 
@@ -66,7 +77,6 @@ function actor_on_update()
     local item = db.actor:active_item()
     local weapon = item and item:cast_Weapon()
     if info and item and weapon then 
-
         local magnification = (info.dynamic_zoom and zoom_cache[item:id()] or 1) * (info.max_magnification - 1) + 1
 
         local pip_magnification = math.min( magnification
@@ -81,7 +91,11 @@ function actor_on_update()
         local zoom_factor  = fov_to_zoomfactor(fov_factor)
         local scope_factor = 1/pip_magnification
 
-        exec_console_cmd("scope_factor " .. scope_factor)
+        -- attempt to correct the zoom over time by modifying the scope_factor
+        local fov_mag_error_approx = mag_between_fovs(device().fov, zoomfactor_to_fov(zoom_factor))
+        scope_factor = 1/(pip_magnification * fov_mag_error_approx)
+
+        exec_console_cmd("scope_factor " .. clamp(scope_factor, 0.001, 1.0))
         weapon:SetZoomFactor(zoom_factor)
 
         if false then 
@@ -115,6 +129,10 @@ function on_game_start()
     if scopes_as_binocs then
         -- sets the zoom factor, which overrides our fixes
         scopes_as_binocs.actor_on_update = function() end
+    end
+    if zoomed_out_scope_draw then
+        zoomed_out_scope_draw.actor_on_weapon_zoom_in = function() end
+        zoomed_out_scope_draw.actor_on_weapon_zoom_out = function() end
     end
 
 	RegisterScriptCallback("actor_on_update", actor_on_update)
