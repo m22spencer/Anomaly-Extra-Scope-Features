@@ -146,4 +146,11 @@ function on_game_start()
     if mwheel_avail then
 		RegisterScriptCallback("on_mouse_wheel",on_mouse_wheel)
 	end
+
+    RegisterScriptCallback("actor_on_weapon_zoom_in", function()
+        local info = active_2d_scope()
+        if info then
+            printf("Magnification: " .. info.max_magnification .. "x |  Dynamic Zoom: " .. (info.dynamic_zoom and "yes" or "no"))
+        end
+    end)
 end
