@@ -86,7 +86,6 @@ function actor_on_update()
 
     local item = db.actor:active_item()
     local weapon = item and item:cast_Weapon()
-    local _ = weapon and weapon:SetZoomFactor(80.0 / 0.75)
     if info and item and weapon then 
         if not zoom_cache[item:id()] then 
             zoom_cache[item:id()] = 0.0;
