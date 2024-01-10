@@ -30,14 +30,44 @@ float2 fake_outer_parallax(float2 tc, float factor)
 	return float2(tcx, tc.y);
 }
 
+float mag_between_fovs(float x, float y) {
+	return 1.0 / (tan(y/2.0) / tan(x/2.0));
+}
+
+static const float TO_RADIANS = 3.14159/180.0;
+
+float get_fov() {
+	return 2.0 * atan(1.0/m_P[1][1]);
+}
+
+// scope_factor is encoded like so: F.FRRRR
+//   where F.F is what the player wants
+//   and RRRR is the desired FOV in radians
+//   player scope_factor is restricted to 0.1->0.9 range. Precision errors otherwise
+float calculate_scope_factor() {
+	float player_scope_factor = floor(fakescope_params1.x * 10.0) / 10.0;
+
+	float want_fov = frac(fakescope_params1.x * 10.0) * 10.0;
+    float have_fov = get_fov();
+
+	// This is the amount of extra magnification we need to correct for the zoom over time.
+	float magnification_error = mag_between_fovs(want_fov, have_fov);
+
+	return player_scope_factor
+		 * magnification_error;
+}
+
+// HUD rotation and the overlay being shown are not in sync
+//   the overlay can display before the rotation is complete.
+//   this causes a single frame with an incorrectly zoomed out view
+//   lowering this estimate will show the scope effect early
+//   0.90 seems to be a good value for supporting down to 30 fps
+static const float HUD_ROTATE_END_ESTIMATE = 0.90;
+
 float4 main(p_screen I,  float4 pos2d : SV_POSITION) : SV_Target
 {
-	// TODO: Figure out how to 
-
-	float scope_factor = fakescope_params1.x;
-	scope_factor = scope_factor > 0.99 
-		? (scope_factor - 0.99) * 1000.0
-		: (scope_factor / 0.99);
+	float scope_factor = calculate_scope_factor();
+	
 	float inner_blur = fakescope_params1.y * scope_factor;
 	float chromatic_abberation = fakescope_params2.x * scope_factor;
 
@@ -60,7 +90,7 @@ float4 main(p_screen I,  float4 pos2d : SV_POSITION) : SV_Target
 
 		float3 half_res_blur = s_blur_2.Sample(smp_base, I.tc0).rgb;
 		
-		if(step(distToCenter, fakescope_params3.x) == 1 && m_hud_params.x >= 1.0)
+		if(step(distToCenter, fakescope_params3.x) == 1 && m_hud_params.x >= HUD_ROTATE_END_ESTIMATE)
 		{
 			I.tc0 = (I.tc0 - 0.5) * scope_factor + 0.5;
 			
