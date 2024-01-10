@@ -44,6 +44,7 @@ float get_fov() {
 //   where F.F is what the player wants
 //   and RRRR is the desired FOV in radians
 //   player scope_factor is restricted to 0.1->0.9 range. Precision errors otherwise
+//   FIXME: <0.5 player scope factor is causing precision loss
 float calculate_scope_factor() {
 	float player_scope_factor = floor(fakescope_params1.x * 10.0) / 10.0;
 
