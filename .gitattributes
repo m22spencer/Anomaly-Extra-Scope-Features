@@ -1,1 +1,3 @@
-*.ps diff
+*.ps linguist-language=HLSL
+*.script linguist-language=Lua
+*.ltx linguist-language=INI 
