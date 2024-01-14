@@ -75,27 +75,19 @@ function active_2d_scope()
             local scope = utils_item.get_attached_scope(item)
             if scope then
                 local zf = ini_sys:r_float_ex(scope, "scope_zoom_factor") or ini_sys:r_float_ex(item:section(), "scope_zoom_factor")
-                if zf and zf > 0 then 
-                    return { weapon            = item:section()
-                           , scope             = scope
-                           , max_magnification = scope_zoom_factor_to_magnification(zf)
-                           , magnifications    = read_magnifications(scope) or read_magnifications(item:section())
-                           , dynamic_zoom      = ini_sys:r_bool_ex(scope, "scope_dynamic_zoom") or ini_sys:r_float_ex(item:section(), "scope_dynamic_zoom") } 
-                else
-                    return nil
-                end
+                return { weapon            = item:section()
+                       , scope             = scope
+                       , max_magnification = zf and scope_zoom_factor_to_magnification(zf)
+                       , magnifications    = read_magnifications(scope) or read_magnifications(item:section())
+                       , dynamic_zoom      = ini_sys:r_bool_ex(scope, "scope_dynamic_zoom") or ini_sys:r_float_ex(item:section(), "scope_dynamic_zoom") } 
             else
                 local section = item:section()
                 local id = item:id()
                 local zf = utils_item.get_param(section, id, "scope_zoom_factor", "float")
-                if zf and zf > 0 then 
-                    return { weapon            = item:section()
-                           , max_magnification = scope_zoom_factor_to_magnification(zf)
-                           , magnifications    = read_magnifications(section)
-                           , dynamic_zoom      = utils_item.get_param(section, id, "scope_dynamic_zoom", "bool") }
-                else
-                    return nil
-                end
+                return { weapon            = item:section()
+                        , max_magnification = zf and scope_zoom_factor_to_magnification(zf)
+                        , magnifications    = read_magnifications(section)
+                        , dynamic_zoom      = utils_item.get_param(section, id, "scope_dynamic_zoom", "bool") }
             end
         else
             -- grenade launcher or alternate sight
@@ -207,6 +199,9 @@ function on_game_start()
 
     RegisterScriptCallback("actor_on_weapon_zoom_in", function()
         info = active_2d_scope()
+        if not (info.max_magnification and info.magnifications) then
+            info = nil
+        end
         if info then
             local mag_string
             if info.magnifications then
@@ -217,9 +212,9 @@ function on_game_start()
                 mag_string = "Magnifications: " .. tostring(info.magnifications and m_str)
             else
                 if info.dynamic_zoom then 
-                    mag_string = "Magnifications: 1-" .. tostring(info.max_magnification) .. "X"
+                    mag_string = "Magnifications(zf): 1-" .. tostring(info.max_magnification) .. "X"
                 else
-                    mag_string = "Magnifications: " .. tostring(info.max_magnification) .. "X"
+                    mag_string = "Magnifications(zf): " .. tostring(info.max_magnification) .. "X"
                 end
             end
 
