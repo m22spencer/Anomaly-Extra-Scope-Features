@@ -199,9 +199,6 @@ function on_game_start()
 
     RegisterScriptCallback("actor_on_weapon_zoom_in", function()
         info = active_2d_scope()
-        if not (info.max_magnification and info.magnifications) then
-            info = nil
-        end
         if info then
             local mag_string
             if info.magnifications then
@@ -219,6 +216,9 @@ function on_game_start()
             end
 
             printf("Weapon: " .. info.weapon .. (info.scope and (" Scope: " .. info.scope) or "") .. " " .. mag_string)
+        end
+        if not (info.max_magnification and info.magnifications) then
+            info = nil
         end
     end)
 end
