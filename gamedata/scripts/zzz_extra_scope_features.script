@@ -217,7 +217,7 @@ function on_game_start()
 
             printf("Weapon: " .. info.weapon .. (info.scope and (" Scope: " .. info.scope) or "") .. " " .. mag_string)
         end
-        if not (info.max_magnification and info.magnifications) then
+        if not (info.max_magnification or info.magnifications) then
             info = nil
         end
     end)
