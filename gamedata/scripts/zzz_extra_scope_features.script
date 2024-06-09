@@ -2,7 +2,7 @@
 -- ![scope_or_weapon_name]
 -- magnifications = 2, 3.5, 6
 
-
+local options = { only_zoom_when_rotated = true }
 
 
 -- patch to change the conversion of scope config information
@@ -10,35 +10,28 @@ function scope_zoom_factor_to_magnification(szf)
     return 60 / szf
 end
 
-local to_rads = 3.14159 / 180
-local to_degs = 1 / to_rads
+local TO_RADIANS = 3.14159 / 180
+local TO_DEGREES = 1 / TO_RADIANS
+local PI = 3.14159;
 
--- conversions -------------------------------------------------------------------------
--- FIXME: these are not quite correct, need to dig through xray-monolith project
-function mag_to_fov(cur_fov, mag)
-	return (2 * math.atan( math.tan(cur_fov*to_rads/2) * (1/mag) )) * to_degs
+-- Find fov that would result in magnification in screen space
+function mag_to_fov(cur_fov, magnification)
+	return (2 * math.atan( math.tan(cur_fov/2) * (1/magnification) ))
 end
 
--- x and y are in degrees
 function mag_between_fovs(x, y)
-    x = x * to_rads
-    y = y * to_rads
-
     return 1 / (math.tan(y/2) / math.tan(x/2))
 end
 
--- TODO: reverse the formula in xray-monolith to double check. This seems to work though
 function fov_to_zoomfactor(fov)
-	return fov / 0.75
+	return fov * TO_DEGREES / 0.75
 end
 
 function zoomfactor_to_fov(zf)
-	return zf * 0.75
+	return zf * 0.75 * TO_RADIANS
 end
--- end conversions
 
 local floatg = "(%d*%.?%d*)"
-
 local p_mag   = "^" .. floatg .. "$"
 local p_mag_r = "^" .. floatg .. "-" .. floatg .. "$"
 function parse_magnification(str)
@@ -84,7 +77,7 @@ function active_2d_scope()
                 local section = item:section()
                 local id = item:id()
                 local zf = utils_item.get_param(section, id, "scope_zoom_factor", "float")
-                return { weapon            = item:section()
+                return {  weapon            = item:section()
                         , max_magnification = zf and scope_zoom_factor_to_magnification(zf)
                         , magnifications    = read_magnifications(section)
                         , dynamic_zoom      = utils_item.get_param(section, id, "scope_dynamic_zoom", "bool") }
@@ -124,37 +117,29 @@ function actor_on_update()
         end
 
         local scope_factor = get_console():get_float("scope_factor");
-        local player_scope_factor = clamp(math.floor(scope_factor * 10), 1, 9) / 10;
-        local max_pip_magnification = 1.0/player_scope_factor;
+        local max_pip_magnification = 1.0/scope_factor;
 
         local pip_magnification = math.min( magnification
                                           , max_pip_magnification)
 
         local remaining_magnification = magnification / pip_magnification
 
-        local fov_factor = mag_to_fov( get_console():get_float("fov")
+        local player_fov = get_console():get_float("fov") * TO_RADIANS
+        local target_fov = mag_to_fov(player_fov, magnification)
+        
+        local fov_factor = mag_to_fov( player_fov
                                      , remaining_magnification)
 
-        local zoom_factor  = fov_to_zoomfactor(fov_factor)
+        local zoom_factor  = options.only_zoom_when_rotated
+            and weapon:GetInertionAimFactor() > 0.001 and fov_to_zoomfactor(player_fov)
+            or fov_to_zoomfactor(fov_factor)
 
-        local want_fov = zoomfactor_to_fov(zoom_factor) * to_rads;
-
-        -- Encode scope_factor, see shader for details
-        local encoded = player_scope_factor
-            + (want_fov/100.0);
-
-        scope_factor = zoomfactor_to_fov(zoom_factor) * to_rads
-        exec_console_cmd("scope_factor " .. encoded)
         weapon:SetZoomFactor(zoom_factor)
-    
-        if false then 
-            printf( " mag: " .. magnification .. "x"
-                .. " pip: " .. pip_magnification .. "x"
-                .. " zoom: " .. remaining_magnification .. "x"
-                .. " zoom_factor: " .. zoom_factor
-                .. " scope_factor: " .. scope_factor
-                )
-        end
+
+        get_console():execute( "shader_param_7 " 
+                            .. player_fov .. ","
+                            .. target_fov 
+                            .. ",0,0")
     end
 end
 

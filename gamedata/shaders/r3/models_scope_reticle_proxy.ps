@@ -1,0 +1,43 @@
+
+uniform float4 shader_param_7;
+
+#define main(X) _main(X, float4 ogse_c_screen, float4 m_hud_params)
+#include "models_scope_reticle.ps"
+#undef main
+
+static const float PI = 3.14159;
+static const float TO_RADIANS = PI/180.0;
+static const float TO_DEGREES = 1/TO_RADIANS;
+
+float mag_between_fovs(float x, float y) {
+	return 1.0 / (tan(y/2.0) / tan(x/2.0));
+}
+
+float4 main(vf I) : SV_Target
+{
+    float player_fov  = shader_param_7.x;
+    float target_fov  = shader_param_7.y;
+    float current_fov = ogse_c_screen.x * TO_RADIANS;
+
+    float fov_magnification = mag_between_fovs(player_fov, current_fov);
+    float pip_magnification = mag_between_fovs(current_fov, target_fov);
+    float magnification     = fov_magnification * pip_magnification;
+
+    // "digital zoom" to account for any error between current_fov and target_fov.
+    //    this makes the optic snap to the desired magnification instantly.
+    float2 screen_tc = I.hpos.xy * screen_res.zw;
+    float2 scope_tc = (screen_tc.xy - 0.5)
+                          / pip_magnification
+                      + 0.5;
+    I.hpos.xy = scope_tc / screen_res.zw;
+
+    // Snapping the view causes 3dss to render wrong. This is a semi fix
+    float4 ogse_c_screen_proxy = ogse_c_screen;
+    ogse_c_screen_proxy.x = player_fov * 1.50 / magnification * TO_DEGREES;
+
+    // Prevent 3dss from doing projection & scaling (causes issues with zoom snapping)
+    float4 m_hud_params_proxy = m_hud_params;
+    m_hud_params_proxy.x = 0.0;
+
+    return _main(I, ogse_c_screen_proxy, m_hud_params_proxy);
+}
