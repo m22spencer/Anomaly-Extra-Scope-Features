@@ -1,6 +1,3 @@
-//credit to CrookR for the original implementation
-
-
 #include "night_vision.h"
 #include "common.h"
 
@@ -12,66 +9,42 @@ float4 fakescope_params1; // power, inner blur, outer blur, brightness
 float4 fakescope_params2; // chroma abber, fog attack(aim), fog attack(move), fog max travel
 float4 fakescope_params3; // radius, relative fog radius, fog sharpness, scope sway amount
 
+uniform float4 ogse_c_screen;
+uniform float4 shader_param_7;
+
+static const float PI = 3.14159;
+static const float TO_RADIANS = PI/180.0;
+static const float TO_DEGREES = 1/TO_RADIANS;
+
+float mag_between_fovs(float x, float y) {
+	return 1.0 / (tan(y/2.0) / tan(x/2.0));
+}
+
 float getparallax(float d)
 {
 	return clamp(1 - pow(1 / fakescope_params3.x * fakescope_params3.y * d, fakescope_params3.z), 0, 1);
 }
+
+
 
 float2 clampMagnitude(float2 v, float l)
 {
 	return normalize(v) * min(length(v), l);
 }
 
-float2 fake_outer_parallax(float2 tc, float factor) 
-{
-	float2 ndc = tc * 2.0 - 1.0;
-	float scl = ndc * factor + (sign(ndc.x) * (1.0-factor));
-	float tcx = scl * 0.5 + 0.5;
-	return float2(tcx, tc.y);
-}
-
-float mag_between_fovs(float x, float y) {
-	return 1.0 / (tan(y/2.0) / tan(x/2.0));
-}
-
-static const float TO_RADIANS = 3.14159/180.0;
-
-float get_fov() {
-	return 2.0 * atan(1.0/m_P[1][1]);
-}
-
-// scope_factor is encoded like so: F.FRRRR
-//   where F.F is what the player wants
-//   and RRRR is the desired FOV in radians
-//   player scope_factor is restricted to 0.1->0.9 range. Precision errors otherwise
-//   FIXME: <0.5 player scope factor is causing precision loss
-float calculate_scope_factor() {
-	float player_scope_factor = floor(fakescope_params1.x * 10.0) / 10.0;
-
-	float want_fov = frac(fakescope_params1.x * 10.0) * 10.0;
-    float have_fov = get_fov();
-
-	// This is the amount of extra magnification we need to correct for the zoom over time.
-	float magnification_error = mag_between_fovs(want_fov, have_fov);
-
-	return player_scope_factor
-		 * magnification_error;
-}
-
-// HUD rotation and the overlay being shown are not in sync
-//   the overlay can display before the rotation is complete.
-//   this causes a single frame with an incorrectly zoomed out view
-//   lowering this estimate will show the scope effect early
-//   0.90 seems to be a good value for supporting down to 30 fps
-static const float HUD_ROTATE_END_ESTIMATE = 0.90;
-
 float4 main(p_screen I,  float4 pos2d : SV_POSITION) : SV_Target
 {
-	float scope_factor = calculate_scope_factor();
-	
-	float inner_blur = fakescope_params1.y * scope_factor;
-	float chromatic_abberation = fakescope_params2.x * scope_factor;
+    float player_fov  = shader_param_7.x;
+    float target_fov  = shader_param_7.y;
+    float current_fov = ogse_c_screen.x * TO_RADIANS;
 
+    float fov_magnification = mag_between_fovs(player_fov, current_fov);
+    float pip_magnification = mag_between_fovs(current_fov, target_fov);
+    float magnification     = fov_magnification * pip_magnification;
+    float scope_factor = 1/pip_magnification;
+
+    float chromatic_abberation = fakescope_params2.x * scope_factor;
+    
 	if(m_hud_params.x > 0 && fakescope_params3.x > 0)
 	{
 		float3 image;
@@ -91,36 +64,21 @@ float4 main(p_screen I,  float4 pos2d : SV_POSITION) : SV_Target
 
 		float3 half_res_blur = s_blur_2.Sample(smp_base, I.tc0).rgb;
 		
-		if(step(distToCenter, fakescope_params3.x) == 1 && m_hud_params.x >= HUD_ROTATE_END_ESTIMATE)
+		if(step(distToCenter, fakescope_params3.x) == 1 && m_hud_params.x >= 1.0)
 		{
-			I.tc0 = (I.tc0 - 0.5) * scope_factor + 0.5;
+			I.tc0 = (I.tc0 - 0.5) * scope_factor - 0.5;
 			
 			image.r = s_image.Sample(smp_base, I.tc0 + (float3(-chromatic_abberation, 0, 0) * distToCenter)).r;
 			image.b = s_image.Sample(smp_base, I.tc0 + (float3( chromatic_abberation, 0, 0) * distToCenter)).b;
 			image.g = s_image.Sample(smp_base, I.tc0).g;
 
-			//fixme: texture coordinates are wrong for blur sample
-			//image = lerp(image, half_res_blur, inner_blur);
-
-			// Don't sample from outside framebuffer
-			float2 o = step(1, abs(I.tc0 * 2.0 - 1.0));
-			image.rgb *= 1 - max(o.x, o.y);
+			//image = lerp(image, half_res_blur, fakescope_params1.y);
 			
-			image.rgb *= getparallax(distToParallax);
-					  //* (oov < 0.0 || oov > 1.0 ? 0.0 : 1.0);  //Don't sample outside texture (inverted magnification)
+			//image.rgb *= getparallax(distToParallax);
 		}
 		else
 		{	
-			/*
-			// Effect needs to occur during fov change, or it looks weird.
-			float2 tc = fake_outer_parallax(I.tc0, .90);
-			tc = lerp(I.tc0, tc, m_hud_params.x);
-			/*/
-			float2 tc = I.tc0;
-			//*/
-
-		
-			image = s_image.Sample(smp_base, tc).xyz;
+			image = s_image.Sample(smp_base, I.tc0).xyz;
 			image = lerp(image, half_res_blur, m_hud_params.x * fakescope_params1.z) * (1 - (m_hud_params.x * (1 - fakescope_params1.w)));
 		}
 		
