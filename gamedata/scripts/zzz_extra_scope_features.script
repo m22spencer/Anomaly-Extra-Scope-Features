@@ -69,6 +69,7 @@ function active_2d_scope()
             if scope then
                 local zf = ini_sys:r_float_ex(scope, "scope_zoom_factor") or ini_sys:r_float_ex(item:section(), "scope_zoom_factor")
                 return { weapon            = item:section()
+                       , weaponWPN         = weapon:section()
                        , scope             = scope
                        , max_magnification = zf and scope_zoom_factor_to_magnification(zf)
                        , magnifications    = read_magnifications(scope) or read_magnifications(item:section())
@@ -77,10 +78,22 @@ function active_2d_scope()
                 local section = item:section()
                 local id = item:id()
                 local zf = utils_item.get_param(section, id, "scope_zoom_factor", "float")
-                return {  weapon            = item:section()
-                        , max_magnification = zf and scope_zoom_factor_to_magnification(zf)
-                        , magnifications    = read_magnifications(section)
-                        , dynamic_zoom      = utils_item.get_param(section, id, "scope_dynamic_zoom", "bool") }
+                local upgrades = utils_item.get_upgrades_installed(item)
+                local magnifications = nil
+                for k,v in pairs(upgrades) do 
+                    magnifications = read_magnifications(ini_sys:r_string_ex(v, "section")) or magnifications
+                end
+                if magnifications then
+                    return { weapon             = upgrades[1]
+                           , magnifications     = magnifications
+                           , max_magnification  = 1
+                           , dynamic_zoom       = utils_item.get_param(section, id, "scope_dynamic_zoom", "bool") }
+                end                
+                return { weapon             = item:section()
+                       , installed_upgrades = utils_item.get_upgrades_installed(item)
+                       , max_magnification  = zf and scope_zoom_factor_to_magnification(zf)
+                       , magnifications     = read_magnifications(section)
+                       , dynamic_zoom       = utils_item.get_param(section, id, "scope_dynamic_zoom", "bool") }
             end
         else
             -- grenade launcher or alternate sight
@@ -200,7 +213,12 @@ function on_game_start()
                 end
             end
 
-            printf("Weapon: " .. info.weapon .. (info.scope and (" Scope: " .. info.scope) or "") .. " " .. mag_string)
+            printf( "Weapon: " .. info.weapon 
+                 .. " WeaponWPN: " .. (info.weaponWPN or 'nil')
+                 .. (info.scope and (" Scope: " .. info.scope) or "") 
+                 .. " " .. mag_string
+                 .. " installed_upgrades: " .. (info.installed_upgrades and info.installed_upgrades[1] or 'nil')
+                )
         end
         if not (info.max_magnification or info.magnifications) then
             info = nil
