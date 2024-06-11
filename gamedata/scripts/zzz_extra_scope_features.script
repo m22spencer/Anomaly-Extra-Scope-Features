@@ -69,7 +69,6 @@ function active_2d_scope()
             if scope then
                 local zf = ini_sys:r_float_ex(scope, "scope_zoom_factor") or ini_sys:r_float_ex(item:section(), "scope_zoom_factor")
                 return { weapon            = item:section()
-                       , weaponWPN         = weapon:section()
                        , scope             = scope
                        , max_magnification = zf and scope_zoom_factor_to_magnification(zf)
                        , magnifications    = read_magnifications(scope) or read_magnifications(item:section())
