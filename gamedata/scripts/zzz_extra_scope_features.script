@@ -16,7 +16,7 @@ local PI = 3.14159;
 
 -- Find fov that would result in magnification in screen space
 function mag_to_fov(cur_fov, magnification)
-	return (2 * math.atan( math.tan(cur_fov/2) * (1/magnification) ))
+    return (2 * math.atan( math.tan(cur_fov/2) * (1/magnification) ))
 end
 
 function mag_between_fovs(x, y)
@@ -69,6 +69,7 @@ function active_2d_scope()
             if scope then
                 local zf = ini_sys:r_float_ex(scope, "scope_zoom_factor") or ini_sys:r_float_ex(item:section(), "scope_zoom_factor")
                 return { weapon            = item:section()
+                       , zoomtype          = zoomtype
                        , scope             = scope
                        , max_magnification = zf and scope_zoom_factor_to_magnification(zf)
                        , magnifications    = read_magnifications(scope) or read_magnifications(item:section())
@@ -84,11 +85,13 @@ function active_2d_scope()
                 end
                 if magnifications then
                     return { weapon             = upgrades[1]
+                           , zoomtype           = zoomtype
                            , magnifications     = magnifications
                            , max_magnification  = 1
                            , dynamic_zoom       = utils_item.get_param(section, id, "scope_dynamic_zoom", "bool") }
                 end                
                 return { weapon             = item:section()
+                       , zoomtype           = zoomtype
                        , installed_upgrades = utils_item.get_upgrades_installed(item)
                        , max_magnification  = zf and scope_zoom_factor_to_magnification(zf)
                        , magnifications     = read_magnifications(section)
@@ -96,7 +99,12 @@ function active_2d_scope()
             end
         else
             -- grenade launcher or alternate sight
-            return nil
+            return { weapon             = item:section()
+                   , zoomtype           = zoomtype
+                   , installed_upgrades = utils_item.get_upgrades_installed(item)
+                   , max_magnification  = 1
+                   , magnifications     = {l = 1, h = 1}
+                   , dynamic_zoom       = utils_item.get_param(section, id, "scope_dynamic_zoom", "bool") }
         end
     end
 end
@@ -107,11 +115,21 @@ local info = nil
 function actor_on_update() 
     local item = db.actor:active_item()
     local weapon = item and item:cast_Weapon()
+
+    if weapon and info and (weapon and weapon:GetZoomType()) ~= info.zoomtype then
+        printf("Aim type changed")
+        info = active_2d_scope()
+    end
+    if info and info.zoomtype ~= 0 then
+        weapon:SetZoomFactor(fov_to_zoomfactor(get_console():get_float("fov") * TO_RADIANS))
+        return
+    end
     if info and item and weapon then 
         if not zoom_cache[item:id()] then 
             zoom_cache[item:id()] = 0.0;
         end
-        local magnification = (info.dynamic_zoom and zoom_cache[item:id()] or 1) * (info.max_magnification - 1) + 1
+        local magnification = info.dynamic_zoom and info.max_magnification and (info.dynamic_zoom and zoom_cache[item:id()] or 1) * (info.max_magnification - 1) + 1
+        local min_magnification
 
         if info.magnifications then 
             local mag1 = info.magnifications[1]
@@ -120,6 +138,7 @@ function actor_on_update()
 
                 local frac = zoom_cache[item:id()];
                 magnification = (mag1.h - mag1.l) * frac + mag1.l;
+                min_magnification = mag1.l
             else
                 local levels = size_table(info.magnifications);
                 local index = math.floor(1 + zoom_cache[item:id()] * (levels - 1));
@@ -131,27 +150,51 @@ function actor_on_update()
         local scope_factor = get_console():get_float("scope_factor");
         local max_pip_magnification = 1.0/scope_factor;
 
+        
+
         local pip_magnification = math.min( magnification
                                           , max_pip_magnification)
 
         local remaining_magnification = magnification / pip_magnification
-
+        
         local player_fov = get_console():get_float("fov") * TO_RADIANS
         local target_fov = mag_to_fov(player_fov, magnification)
         
+
         local fov_factor = mag_to_fov( player_fov
                                      , remaining_magnification)
+
+        
 
         local zoom_factor  = options.only_zoom_when_rotated
             and weapon:GetInertionAimFactor() > 0.001 and fov_to_zoomfactor(player_fov)
             or fov_to_zoomfactor(fov_factor)
+        
 
         weapon:SetZoomFactor(zoom_factor)
 
-        get_console():execute( "shader_param_7 " 
-                            .. player_fov .. ","
-                            .. target_fov 
-                            .. ",0,0")
+
+        if false then 
+            get_console():execute( "shader_param_7 " 
+                                .. player_fov .. ","
+                                .. target_fov 
+                                .. ",0,0")
+        else
+            local get = z_3d_scopes.get
+            local section = item:section()
+
+            local x = math.floor(get(section, "3ds_type")) + (player_fov / 3.14159)
+            local y = math.floor(min_magnification or magnification)  + (target_fov / 3.14159)
+            get_console():execute(
+                "shader_param_6 " .. 
+                x .. ", " ..
+                y .. ", " ..
+                get(section, "3ds_reticle_size") .. ", " ..
+                get(section, "3ds_shadow_project"))
+                
+            -- get_console():execute("shader_param_6")                
+        end
+
     end
 end
 
@@ -215,13 +258,11 @@ function on_game_start()
             end
 
             printf( "Weapon: " .. info.weapon 
-                 .. " WeaponWPN: " .. (info.weaponWPN or 'nil')
                  .. (info.scope and (" Scope: " .. info.scope) or "") 
                  .. " " .. mag_string
-                 .. " installed_upgrades: " .. (info.installed_upgrades and info.installed_upgrades[1] or 'nil')
                 )
         end
-        if not (info.max_magnification or info.magnifications) then
+        if info and not (info.max_magnification or info.magnifications) then
             info = nil
         end
     end)

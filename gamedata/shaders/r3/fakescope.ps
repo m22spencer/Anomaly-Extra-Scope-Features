@@ -10,7 +10,7 @@ float4 fakescope_params2; // chroma abber, fog attack(aim), fog attack(move), fo
 float4 fakescope_params3; // radius, relative fog radius, fog sharpness, scope sway amount
 
 uniform float4 ogse_c_screen;
-uniform float4 shader_param_7;
+uniform float4 shader_param_6;
 
 static const float PI = 3.14159;
 static const float TO_RADIANS = PI/180.0;
@@ -34,8 +34,8 @@ float2 clampMagnitude(float2 v, float l)
 
 float4 main(p_screen I,  float4 pos2d : SV_POSITION) : SV_Target
 {
-    float player_fov  = shader_param_7.x;
-    float target_fov  = shader_param_7.y;
+    float player_fov = frac(shader_param_6.x) * PI;
+    float target_fov = frac(shader_param_6.y) * PI;
     float current_fov = ogse_c_screen.x * TO_RADIANS;
 
     float fov_magnification = mag_between_fovs(player_fov, current_fov);
