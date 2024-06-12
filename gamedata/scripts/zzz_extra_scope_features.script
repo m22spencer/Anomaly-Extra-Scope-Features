@@ -262,8 +262,10 @@ function print_optic_detail(info)
     if info.magnifications then
         local m_str = ""
         for k,v in pairs(info.magnifications) do
+            local vl = tostring(tonumber(v.l))
+            local vh = tostring(tonumber(v.h))
 
-            m_str = m_str .. (v.l == v.h and tonumber(v.l) or (v.l .. "-" .. v.h) or "")
+            m_str = m_str .. (vl == vh and tonumber(vl) or (vl .. "-" .. vh) or "")
         end
         mag_string = "Magnifications: " .. tostring(info.magnifications and m_str)
     end
