@@ -296,6 +296,8 @@ function on_game_start()
         local info = active_2d_scope()
         if info then
             print_optic_detail(info)
+
+            actor_on_update()
         end
     end)
 end
