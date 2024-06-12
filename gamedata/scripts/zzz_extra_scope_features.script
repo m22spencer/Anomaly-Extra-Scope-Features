@@ -7,7 +7,9 @@ local options = { only_zoom_when_rotated = true }
 
 -- patch to change the conversion of scope config information
 function scope_zoom_factor_to_magnification(szf)
-    return szf < 1 and 1 or 60 / szf
+    if szf then
+        return szf < 1 and 1 or 60 / szf
+    end
 end
 
 local TO_RADIANS = 3.14159 / 180
@@ -40,19 +42,28 @@ function parse_magnification(str)
     l = tonumber(l or str:match(p_mag))
     h = tonumber(h)
 
-    return l and h
-        and {l = l, h = h}
-        or l
+    return {l = l, h = h or l}
 end
 
-function read_magnifications(section)
-    local magnifications = ini_sys:r_list(section, "magnifications")
+function read_magnifications(section, alt)
+    local magnifications = ini_sys:r_list(section, alt and "magnifications_alt" or "magnifications")
     if magnifications then
         for k,v in pairs(magnifications) do
             magnifications[k] = parse_magnification(v)
         end
     end
     return magnifications
+end
+
+function read_gamma_3dss(section, alt)
+    local max = ini_sys:r_float_ex(section, alt and "magnification_alt" or "magnification")
+                    or scope_zoom_factor_to_magnification(ini_sys:r_float_ex(section, alt and "scope_zoom_factor_alt" or "scope_zoom_factor"))
+    local mz = ini_sys:r_float_ex(section, alt and "3ds_ffp_min_zoom_alt" or "3ds_ffp_min_zoom")
+    local min = (mz and scope_zoom_factor_to_magnification(mz))
+            or (ini_sys:r_bool_ex(section, alt and "scope_dynamic_zoom_alt" or "scope_dynamic_zoom") and 1)
+            or nil
+    return {parse_magnification(min and (min .. "-" .. max)
+                                    or tostring(max))}
 end
 
 function _active_2d_scope()
@@ -64,48 +75,39 @@ function _active_2d_scope()
         end
         local zoomtype = weapon:GetZoomType()
 
-        if zoomtype == 0 then
-            local scope = utils_item.get_attached_scope(item)
-            if scope then
-                local zf = ini_sys:r_float_ex(scope, "scope_zoom_factor") or ini_sys:r_float_ex(item:section(), "scope_zoom_factor")
-                return { weapon            = item:section()
-                       , zoomtype          = zoomtype
-                       , scope             = scope
-                       , max_magnification = zf and scope_zoom_factor_to_magnification(zf)
-                       , magnifications    = read_magnifications(scope) or read_magnifications(item:section())
-                       , dynamic_zoom      = ini_sys:r_bool_ex(scope, "scope_dynamic_zoom") or ini_sys:r_float_ex(item:section(), "scope_dynamic_zoom") } 
-            else
-                local section = item:section()
-                local id = item:id()
-                local zf = utils_item.get_param(section, id, "scope_zoom_factor", "float")
-                local upgrades = utils_item.get_upgrades_installed(item)
-                local magnifications = nil
-                for k,v in pairs(upgrades) do 
-                    magnifications = read_magnifications(ini_sys:r_string_ex(v, "section")) or magnifications
-                end
-                if magnifications then
-                    return { weapon             = upgrades[1]
-                           , zoomtype           = zoomtype
-                           , magnifications     = magnifications
-                           , max_magnification  = 1
-                           , dynamic_zoom       = utils_item.get_param(section, id, "scope_dynamic_zoom", "bool") }
-                end                
-                return { weapon             = item:section()
-                       , zoomtype           = zoomtype
-                       , installed_upgrades = utils_item.get_upgrades_installed(item)
-                       , max_magnification  = zf and scope_zoom_factor_to_magnification(zf)
-                       , magnifications     = read_magnifications(section)
-                       , dynamic_zoom       = utils_item.get_param(section, id, "scope_dynamic_zoom", "bool") }
-            end
-        else
-            -- grenade launcher or alternate sight
-            return { weapon             = item:section()
-                   , zoomtype           = zoomtype
-                   , installed_upgrades = utils_item.get_upgrades_installed(item)
-                   , max_magnification  = 1
-                   , magnifications     = {l = 1, h = 1}
-                   , dynamic_zoom       = utils_item.get_param(section, id, "scope_dynamic_zoom", "bool") }
+        local section = zoomtype == 0 and utils_item.get_attached_scope(item) or item:section()
+        local isAlt = zoomtype ~= 0
+
+        function f(section, isAlt)
+            local m = read_magnifications(section, isAlt)
+            return m and { magnifications = m, origin = "magnifications" }
+                     or  { magnifications = read_gamma_3dss(section, isAlt), origin = "gamma_3dss" }
         end
+
+        printf("Read gamma_3ds: " .. section .. " alt? " .. (isAlt and "yes" or "no"))
+        local r = f(section, isAlt)
+        r.weapon = section
+        r.zoomtype = zoomtype
+
+        printf(utils_data.print_table(r.magnifications, "r.magnifications", true))
+
+        item:iterate_installed_upgrades(function(upgrade) 
+            local upgrade_section = ini_sys:r_string_ex(upgrade, "section")
+            local ur = f(upgrade_section, isAlt)
+            printf(utils_data.print_table(ur, "ur", true))
+            if #ur.magnifications ~= #r.magnifications then
+                printf("Invalid number of entries in upgrade " .. upgrade_section)
+                return
+            end
+            for k,v in pairs(ur.magnifications) do
+                local rk = r.magnifications[k]
+                local uk = ur.magnifications[k]
+                rk.l = rk.l + uk.l
+                rk.h = rk.h + uk.h
+            end
+        end)
+
+        return r;
     end
 end
 
@@ -121,15 +123,13 @@ function active_2d_scope()
             if not r then
                 return nil
             end
-            if not r.magnifications then
-                r.magnifications = {{ l = r.dynamic_zoom and 1 or r.max_magnification
-                                , h = r.max_magnification}}
-            end
             if not r.magnifications[1].l then
                 printf("Error: Missing low mag")
+                printf(utils_data.print_table(r, "active_2d_scope", true))
                 return nil
             elseif not r.magnifications[1].h then
                 printf("Error: Missing high mag")
+                printf(utils_data.print_table(r, "active_2d_scope", true))
                 return nil
             end
             printf("New item seen: " .. key)
@@ -258,20 +258,16 @@ function print_optic_detail(info)
     if info.magnifications then
         local m_str = ""
         for k,v in pairs(info.magnifications) do
-            m_str = m_str .. (tonumber(v) or (v.l .. "-" .. v.h)) .. "X "
+
+            m_str = m_str .. (v.l == v.h and tonumber(v.l) or (v.l .. "-" .. v.h) or "")
         end
         mag_string = "Magnifications: " .. tostring(info.magnifications and m_str)
-    else
-        if info.dynamic_zoom then 
-            mag_string = "Magnifications(zf): 1-" .. tostring(info.max_magnification) .. "X"
-        else
-            mag_string = "Magnifications(zf): " .. tostring(info.max_magnification) .. "X"
-        end
     end
 
     printf( "Weapon: " .. info.weapon 
-         .. (info.scope and (" Scope: " .. info.scope) or "") 
-         .. " " .. mag_string
+         .. (info.scope and (" Scope: " .. info.scope) or "")
+         .. " " .. mag_string 
+         .. " origin: " .. (info.origin or "nil")
         )
 end
 
