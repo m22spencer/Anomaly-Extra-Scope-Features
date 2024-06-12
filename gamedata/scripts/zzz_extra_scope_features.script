@@ -239,7 +239,7 @@ end
 
 function on_mouse_wheel(scroll_dir, flags) 
     local info = active_2d_scope()
-    if info and scroll_dir then
+    if info and scroll_dir and (not actor_menu.inventory_opened()) then
         local mag_levels = info.magnifications and tonumber(info.magnifications[1])
             and (size_table(info.magnifications)-1)
             or get_console():get_float("zoom_step_count")
