@@ -62,8 +62,11 @@ function read_gamma_3dss(section, alt)
     local min = (mz and scope_zoom_factor_to_magnification(mz))
             or (ini_sys:r_bool_ex(section, alt and "scope_dynamic_zoom_alt" or "scope_dynamic_zoom") and 1)
             or nil
-    return {parse_magnification(min and (min .. "-" .. max)
-                                    or tostring(max))}
+    
+    return (not max) 
+        and {}
+        or  {parse_magnification(min and (min .. "-" .. max)
+                                     or tostring(max))}
 end
 
 function _active_2d_scope()
@@ -80,8 +83,10 @@ function _active_2d_scope()
 
         function f(section, isAlt)
             local m = read_magnifications(section, isAlt)
-            return m and { magnifications = m, origin = "magnifications" }
-                     or  { magnifications = read_gamma_3dss(section, isAlt), origin = "gamma_3dss" }
+            local r = m and { magnifications = m, origin = "magnifications" }
+                        or  { magnifications = read_gamma_3dss(section, isAlt), origin = "gamma_3dss" }
+            r.magnifications = #r.magnifications == 0 and {{l = 1, h = 1}} or r.magnifications
+            return r
         end
 
         printf("Read gamma_3ds: " .. section .. " alt? " .. (isAlt and "yes" or "no"))
@@ -95,6 +100,10 @@ function _active_2d_scope()
             local upgrade_section = ini_sys:r_string_ex(upgrade, "section")
             local ur = f(upgrade_section, isAlt)
             printf(utils_data.print_table(ur, "ur", true))
+            if #ur.magnifications == 0 then
+                -- Upgrade does not contain optic information
+                return
+            end
             if #ur.magnifications ~= #r.magnifications then
                 printf("Invalid number of entries in upgrade " .. upgrade_section)
                 return
@@ -102,8 +111,12 @@ function _active_2d_scope()
             for k,v in pairs(ur.magnifications) do
                 local rk = r.magnifications[k]
                 local uk = ur.magnifications[k]
-                rk.l = rk.l + uk.l
-                rk.h = rk.h + uk.h
+                if not uk.l or not uk.h then
+                    printf("Unable to apply magnification change from upgrade: " .. upgrade_section)
+                else
+                    rk.l = rk.l + uk.l
+                    rk.h = rk.h + uk.h
+                end
             end
         end)
 
@@ -121,15 +134,6 @@ function active_2d_scope()
         if not property_cache[key] then
             local r = _active_2d_scope()
             if not r then
-                return nil
-            end
-            if not r.magnifications[1].l then
-                printf("Error: Missing low mag")
-                printf(utils_data.print_table(r, "active_2d_scope", true))
-                return nil
-            elseif not r.magnifications[1].h then
-                printf("Error: Missing high mag")
-                printf(utils_data.print_table(r, "active_2d_scope", true))
                 return nil
             end
             printf("New item seen: " .. key)
