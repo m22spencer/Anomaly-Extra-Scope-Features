@@ -1,18 +1,33 @@
+; magnifications takes a list of 
+;   exact zoom   : N
+;   variable zoom: M-N
+
+; Anomaly equivalents \/
+; scope_zoom_factor 15 , dynamic_zoom no  -> magnifications = 4
+; scope_zoom_factor 7.5, dynamic_zoom yes -> magnifications = 1-8
+
+; No anomaly equivalent \/
+; toggle between exact zooms              -> magnifications = 2, 4, 8
+; combination of the above                -> magnifications = 2-8, 16
+
+; section search priority is attached_scope, then item section
+
 
 ![1p59] --Dynamic
     magnifications = 3-10
 
+![pso2]
+    magnifications = 4
+
 ![wpn_svd_nimble]
     magnifications = 3-10
 
-![wpn_ak105_swamp]
-    magnifications = 1-3
-; 
 ![wpn_binoc]
     magnifications  = 1-3
     scope_radii     = 1.0
 
 ![up_sect_firsta_binoc]
+    ; upgrades are applied as deltas
     magnifications  = 0-7
 
 ![up_sect_firstc_binoc]
