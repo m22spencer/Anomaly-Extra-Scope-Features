@@ -282,6 +282,14 @@ function on_game_start()
         zoomed_out_scope_draw.actor_on_weapon_zoom_out = function() end
     end
 
+    if z_3d_scopes then
+        z_3d_scopes.actor_on_update = function() end
+    end
+
+    if zzz_mspizzaZoomCalc then
+        zzz_mspizzaZoomCalc.actor_on_weapon_zoom_in = function() end
+    end
+
 	RegisterScriptCallback("actor_on_update", actor_on_update)
     if mwheel_avail then
 		RegisterScriptCallback("on_mouse_wheel",on_mouse_wheel)
