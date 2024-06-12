@@ -138,7 +138,6 @@ function active_2d_scope()
             end
             printf("New item seen: " .. key)
             r.key = key
-            r.zoom_cache = 0.0
             property_cache[key] = r
         end
         return property_cache[key]
@@ -174,27 +173,8 @@ function actor_on_update()
             last_key = info.key
             print_optic_detail(info) 
         end
-        if not info.zoom_cache then 
-            info.zoom_cache = 0.0;
-        end
-        local magnification = info.dynamic_zoom and info.max_magnification and (info.dynamic_zoom and info.zoom_cache or 1) * (info.max_magnification - 1) + 1
-        local min_magnification
-
-        if info.magnifications then 
-            local mag1 = info.magnifications[1]
-            if not tonumber(mag1) then
-                
-
-                local frac = info.zoom_cache;
-                magnification = (mag1.h - mag1.l) * frac + mag1.l;
-                min_magnification = mag1.l
-            else
-                local levels = size_table(info.magnifications);
-                local index = math.floor(1 + info.zoom_cache * (levels - 1));
-
-                magnification = tonumber(info.magnifications[index] or magnification)
-            end
-        end
+        
+        local magnification     = info.zoom_levels[info.zoom_cache]
 
         local scope_factor = get_console():get_float("scope_factor");
         local max_pip_magnification = 1.0/scope_factor;
@@ -227,7 +207,10 @@ function actor_on_update()
         local section = item:section()
 
         local x = math.floor(get(section, "3ds_type")) + (player_fov / 3.14159)
-        local y = math.floor(min_magnification or magnification)  + (target_fov / 3.14159)
+
+        
+        local min_magnification = info.magnifications[1].l -- hack to make the existing 3dss shader work
+        local y = math.floor(min_magnification) + (target_fov / 3.14159)
         get_console():execute(
             "shader_param_6 " .. 
             x .. ", " ..
@@ -240,16 +223,8 @@ end
 function on_mouse_wheel(scroll_dir, flags) 
     local info = active_2d_scope()
     if info and scroll_dir and (not actor_menu.inventory_opened()) then
-        local mag_levels = info.magnifications and tonumber(info.magnifications[1])
-            and (size_table(info.magnifications)-1)
-            or get_console():get_float("zoom_step_count")
-
-        local zoom_step = 1 / mag_levels
-
         local scroll_delta = scroll_dir * 2 - 1;
-
-        local item = db.actor:active_item()
-        info.zoom_cache = clamp((info.zoom_cache or 0) + scroll_delta * zoom_step, 0, 1)
+        info.zoom_cache = clamp(info.zoom_cache + scroll_delta, 1, #info.zoom_levels)
         flags.ret_value = false
     end
 end
@@ -310,6 +285,26 @@ function on_game_start()
         local info = active_2d_scope()
         if info then
             print_optic_detail(info)
+
+            local zoom_step_count = get_console():get_float("zoom_step_count")
+
+            local fm = {}
+
+            for k,v in pairs(info.magnifications) do
+                if v.l == v.h then
+                    table.insert(fm, v.l)
+                else
+                    local incr = (v.h - v.l) / zoom_step_count
+                    for i=0,zoom_step_count do 
+                        table.insert(fm, v.l + i*incr)
+                    end
+                end
+            end
+
+            printf(utils_data.print_table(fm, "fm", true))
+
+            info.zoom_levels = fm;
+            info.zoom_cache  = 1;
 
             actor_on_update()
         end
