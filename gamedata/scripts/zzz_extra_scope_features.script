@@ -281,7 +281,7 @@ function print_optic_detail(info)
             local vl = tostring(tonumber(v.l))
             local vh = tostring(tonumber(v.h))
 
-            m_str = m_str .. (vl == vh and tonumber(vl) or (vl .. "-" .. vh) or "")
+            m_str = m_str .. (k > 1 and ", " or "") .. (vl == vh and tonumber(vl) or (vl .. "-" .. vh) or "")
         end
         mag_string = "Magnifications: " .. tostring(info.magnifications and m_str)
     end
