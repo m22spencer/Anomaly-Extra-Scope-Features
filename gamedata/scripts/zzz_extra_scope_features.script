@@ -1,11 +1,29 @@
--- to add magnifications via DLTX (check console after zooming weapon for names)
--- ![scope_or_weapon_name]
--- magnifications = 2, 3.5, 6
+--[[ 
+to add magnifications via DLTX (check console after zooming weapon for names)
 
-local options = { only_zoom_when_rotated = true
-                , use_linear_smoothzoom  = false
+section search priority is attached_scope, then item section
+magnifications takes a comma separated list of 
+exact zoom   : N
+variable zoom: M-N
+
+Anomaly equivalents \/
+scope_zoom_factor 15 , dynamic_zoom no  -> magnifications = 4
+scope_zoom_factor 7.5, dynamic_zoom yes -> magnifications = 1-8
+
+No anomaly equivalent \/
+toggle between exact zooms              -> magnifications = 2, 4, 8
+combination of the above                -> magnifications = 2-8, 16
+]]--
+
+local options = { -- Delay the zoom in until the optic is (near) centered 
+                  -- Gives the eye a distraction and may feel closer to pip
+                  only_zoom_when_rotated = true     
+
+                  -- makes dynamic zoom seem more like a dial, but feels detached/laggy
+                , use_linear_smoothzoom  = false    
                 }
 
+-- patch to change the easing function for dynamic zoom
 function calculate_smoothzoom_delta(current, target, delta_seconds)
     if use_linear_smoothzoom then
         local dir    = (target > current) and 1 or -1
@@ -28,6 +46,7 @@ local TO_DEGREES = 1 / TO_RADIANS
 local PI = 3.14159;
 
 -- Find fov that would result in magnification in screen space
+--    if you change this, you must provide matching tc calculations in the shader
 function mag_to_fov(cur_fov, magnification)
     return (2 * math.atan( math.tan(cur_fov/2) * (1/magnification) ))
 end
@@ -110,13 +129,13 @@ function _active_2d_scope()
         item:iterate_installed_upgrades(function(upgrade) 
             local upgrade_section = ini_sys:r_string_ex(upgrade, "section")
             local ur = f(upgrade_section, isAlt)
-            debug(utils_data.print_table(ur, "ur", true))
+            debug(utils_data.print_table(ur, "upgrade_magnifiction", true))
             if #ur.magnifications == 0 then
                 -- Upgrade does not contain optic information
                 return
             end
             if #ur.magnifications ~= #r.magnifications then
-                error("Invalid number of entries in upgrade " .. upgrade_section)
+                error("Invalid number of entries in upgrade magnification " .. upgrade_section)
                 return
             end
             for k,v in pairs(ur.magnifications) do
@@ -180,8 +199,7 @@ function current_magnification(info)
     local zsc_err = ((zsc + 1) / zsc)
     local range = info.magnifications[math.floor(info.zoom_cache)]
     local zoom_frac = math.fmod(info.zoom_cache, 1) * zsc_err
-    local magnification = (range.h - range.l) * zoom_frac + range.l
-    return magnification
+    return (range.h - range.l) * zoom_frac + range.l
 end
 
 local last_key = nil
@@ -204,12 +222,10 @@ function actor_on_update()
         info.current_mag = info.current_mag + math.min(mag_delta, max_delta)        
 
         local magnification = info.current_mag
-        local min_magnification = info.magnifications[1].l
+        local min_magnification = info.magnifications[1].l  -- hack to make shader work until rewrite
 
         local scope_factor = get_console():get_float("scope_factor");
         local max_pip_magnification = 1.0/scope_factor;
-
-        
 
         local pip_magnification = math.min( magnification
                                           , max_pip_magnification)
@@ -232,12 +248,11 @@ function actor_on_update()
 
         weapon:SetZoomFactor(zoom_factor)
 
-
         local get = z_3d_scopes.get
         local section = item:section()
 
         local x = math.floor(get(section, "3ds_type")) + (player_fov / 3.14159)
-        local y = math.floor(min_magnification or magnification)  + (target_fov / 3.14159)
+        local y = math.floor(min_magnification)  + (target_fov / 3.14159)
         get_console():execute(
             "shader_param_6 " .. 
             x .. ", " ..
@@ -247,6 +262,7 @@ function actor_on_update()
     end
 end
 
+-- If wantClamp is false, the zoom will wrap.  Useful to support a "cycle zoom" keybind
 function change_zoom(info, direction, wantClamp)
     if info then
         local step_count = get_console():get_float("zoom_step_count")
