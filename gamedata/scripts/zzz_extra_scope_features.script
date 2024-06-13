@@ -89,30 +89,30 @@ function _active_2d_scope()
             return r
         end
 
-        printf("Read gamma_3ds: " .. section .. " alt? " .. (isAlt and "yes" or "no"))
+        debug("Read gamma_3ds: " .. section .. " alt? " .. (isAlt and "yes" or "no"))
         local r = f(section, isAlt)
         r.weapon = section
         r.zoomtype = zoomtype
 
-        printf(utils_data.print_table(r.magnifications, "r.magnifications", true))
+        debug(utils_data.print_table(r.magnifications, "r.magnifications", true))
 
         item:iterate_installed_upgrades(function(upgrade) 
             local upgrade_section = ini_sys:r_string_ex(upgrade, "section")
             local ur = f(upgrade_section, isAlt)
-            printf(utils_data.print_table(ur, "ur", true))
+            debug(utils_data.print_table(ur, "ur", true))
             if #ur.magnifications == 0 then
                 -- Upgrade does not contain optic information
                 return
             end
             if #ur.magnifications ~= #r.magnifications then
-                printf("Invalid number of entries in upgrade " .. upgrade_section)
+                error("Invalid number of entries in upgrade " .. upgrade_section)
                 return
             end
             for k,v in pairs(ur.magnifications) do
                 local rk = r.magnifications[k]
                 local uk = ur.magnifications[k]
                 if not uk.l or not uk.h then
-                    printf("Unable to apply magnification change from upgrade: " .. upgrade_section)
+                    error("Unable to apply magnification change from upgrade: " .. upgrade_section)
                 else
                     rk.l = rk.l + uk.l
                     rk.h = rk.h + uk.h
@@ -137,7 +137,7 @@ function active_2d_scope()
             if not r then
                 return nil
             end
-            printf("New item seen: " .. key)
+            debug("New item seen: " .. key)
             r.key = key
             r.zoom_cache = 1
             r.current_mag = r.magnifications[1].l
@@ -182,7 +182,7 @@ function actor_on_update()
     local info = active_2d_scope()
     if info and item and weapon then 
         if last_key ~= info.key then
-            printf("Aim type changed: " .. (last_key or "nil") .. " -> " .. (info and info.key or "nil"))
+            debug("Aim type changed: " .. (last_key or "nil") .. " -> " .. (info and info.key or "nil"))
             last_key = info.key
             print_optic_detail(info) 
         end
@@ -273,6 +273,8 @@ function change_zoom(info, direction, wantClamp)
             -- If swapping to or from a fixed magnification, we want the view to instantly change
             info.current_mag = info.target_mag
         end
+
+        debug("Target magnification: %s", info.target_mag)
     end
 end
 
@@ -302,7 +304,7 @@ function print_optic_detail(info)
         mag_string = "Magnifications: " .. tostring(info.magnifications and m_str)
     end
 
-    printf( "Weapon: " .. info.weapon 
+    log( "Weapon: " .. info.weapon 
          .. (info.scope and (" Scope: " .. info.scope) or "")
          .. " " .. mag_string 
          .. " origin: " .. (info.origin or "nil")
@@ -346,4 +348,18 @@ function on_game_start()
             actor_on_update()
         end
     end)
+end
+
+function debug(...)
+    if DEV_DEBUG then
+        printf(...)
+    end
+end
+
+function log(...)
+    printf(...)
+end
+
+function error(fmt, ...)
+    printf("ERROR: " .. fmt, ...)
 end
