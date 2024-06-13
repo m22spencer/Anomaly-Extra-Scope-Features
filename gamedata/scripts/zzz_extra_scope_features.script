@@ -138,7 +138,7 @@ function active_2d_scope()
             end
             printf("New item seen: " .. key)
             r.key = key
-            r.zoom_cache = 0.0
+            r.zoom_cache = 1
             property_cache[key] = r
         end
         return property_cache[key]
@@ -161,6 +161,15 @@ function get_item_key(item)
     return id .. ":" .. zoomtype .. ":" .. section .. ":" .. upgrades
 end
 
+function current_magnification(info) 
+    local zsc = get_console():get_float("zoom_step_count")
+    local zsc_err = ((zsc + 1) / zsc)
+    local range = info.magnifications[math.floor(info.zoom_cache)]
+    local zoom_frac = math.fmod(info.zoom_cache, 1) * zsc_err
+    local magnification = (range.h - range.l) * zoom_frac + range.l
+    return magnification
+end
+
 local last_key = nil
 function actor_on_update() 
     
@@ -174,27 +183,11 @@ function actor_on_update()
             last_key = info.key
             print_optic_detail(info) 
         end
-        if not info.zoom_cache then 
-            info.zoom_cache = 0.0;
-        end
-        local magnification = info.dynamic_zoom and info.max_magnification and (info.dynamic_zoom and info.zoom_cache or 1) * (info.max_magnification - 1) + 1
-        local min_magnification
 
-        if info.magnifications then 
-            local mag1 = info.magnifications[1]
-            if not tonumber(mag1) then
-                
+        info.current_mag = info.current_mag + (info.target_mag - info.current_mag) / 8.0
 
-                local frac = info.zoom_cache;
-                magnification = (mag1.h - mag1.l) * frac + mag1.l;
-                min_magnification = mag1.l
-            else
-                local levels = size_table(info.magnifications);
-                local index = math.floor(1 + info.zoom_cache * (levels - 1));
-
-                magnification = tonumber(info.magnifications[index] or magnification)
-            end
-        end
+        local magnification = info.current_mag
+        local min_magnification = info.magnifications[1].l
 
         local scope_factor = get_console():get_float("scope_factor");
         local max_pip_magnification = 1.0/scope_factor;
@@ -240,16 +233,38 @@ end
 function on_mouse_wheel(scroll_dir, flags) 
     local info = active_2d_scope()
     if info and scroll_dir and (not actor_menu.inventory_opened()) then
-        local mag_levels = info.magnifications and tonumber(info.magnifications[1])
-            and (size_table(info.magnifications)-1)
-            or get_console():get_float("zoom_step_count")
+        local step_count = get_console():get_float("zoom_step_count")
+        local step_count_1 = step_count + 1
 
-        local zoom_step = 1 / mag_levels
+        local scroll_delta = scroll_dir * 2 - 1
 
-        local scroll_delta = scroll_dir * 2 - 1;
+        local n = #info.magnifications
 
-        local item = db.actor:active_item()
-        info.zoom_cache = clamp((info.zoom_cache or 0) + scroll_delta * zoom_step, 0, 1)
+        local czc = info.zoom_cache
+
+        function fixed(zc)
+            local cur = info.magnifications[math.floor(zc+0.01)]
+            return cur.l == cur.h
+        end
+
+        if scroll_delta > 0 and fixed(info.zoom_cache) then 
+            info.zoom_cache = clamp(info.zoom_cache + 1.0, 1, n + (step_count/(step_count+1)))
+        else 
+            info.zoom_cache = clamp(info.zoom_cache + (scroll_delta / step_count_1), 1, n + (step_count/(step_count+1)))
+        end
+        
+        if fixed(info.zoom_cache) then
+            info.zoom_cache = math.floor(info.zoom_cache+0.01)
+        end
+
+        printf("Zoom changed: " .. czc .. " -> " .. info.zoom_cache)
+        printf("Current mag: " .. current_magnification(info)) 
+
+        info.target_mag = current_magnification(info)
+        if fixed(info.zoom_cache) or fixed(czc) then
+            info.current_mag = current_magnification(info)
+        end
+
         flags.ret_value = false
     end
 end
@@ -310,6 +325,9 @@ function on_game_start()
         local info = active_2d_scope()
         if info then
             print_optic_detail(info)
+
+            info.current_mag = current_magnification(info)
+            info.target_mag  = info.current_mag
 
             actor_on_update()
         end
