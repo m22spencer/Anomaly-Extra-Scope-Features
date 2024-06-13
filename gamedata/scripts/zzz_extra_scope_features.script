@@ -325,8 +325,7 @@ function print_optic_detail(info)
         )
 end
 
-function on_game_start()
-    -- Compatibility patches
+function disable_conflicting_scripts()
     if scopes_as_binocs then
         -- sets the zoom factor, which overrides our fixes
         scopes_as_binocs.actor_on_update = function() end
@@ -343,6 +342,10 @@ function on_game_start()
     if zzz_mspizzaZoomCalc then
         zzz_mspizzaZoomCalc.actor_on_weapon_zoom_in = function() end
     end
+end
+
+function on_game_start()
+    disable_conflicting_scripts()    
 
 	RegisterScriptCallback("actor_on_update", actor_on_update)
     if mwheel_avail then
