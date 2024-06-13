@@ -2,8 +2,19 @@
 -- ![scope_or_weapon_name]
 -- magnifications = 2, 3.5, 6
 
-local options = { only_zoom_when_rotated = true }
+local options = { only_zoom_when_rotated = true
+                , use_linear_smoothzoom  = false
+                }
 
+function calculate_smoothzoom_delta(current, target, delta_seconds)
+    if use_linear_smoothzoom then
+        local dir    = (target > current) and 1 or -1
+        local amount = 4.0 * delta_seconds
+        return math.min(math.abs(target - current), amount) * dir
+    else
+        return (target - current) / math.max(8.0 / (delta_seconds * 77), 1)
+    end
+end
 
 -- patch to change the conversion of scope config information
 function scope_zoom_factor_to_magnification(szf)
@@ -187,7 +198,10 @@ function actor_on_update()
             print_optic_detail(info) 
         end
 
-        info.current_mag = info.current_mag + (info.target_mag - info.current_mag) / 8.0
+        local delta_seconds = device().f_time_delta
+        local mag_delta = calculate_smoothzoom_delta(info.current_mag, info.target_mag, delta_seconds)
+        local max_delta = math.abs(info.target_mag - info.current_mag)
+        info.current_mag = info.current_mag + math.min(mag_delta, max_delta)        
 
         local magnification = info.current_mag
         local min_magnification = info.magnifications[1].l
