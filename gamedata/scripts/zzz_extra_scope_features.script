@@ -140,6 +140,8 @@ function active_2d_scope()
             printf("New item seen: " .. key)
             r.key = key
             r.zoom_cache = 1
+            r.current_mag = r.magnifications[1].l
+            r.target_mag  = r.current_mag
             property_cache[key] = r
         end
         return property_cache[key]
@@ -231,13 +233,11 @@ function actor_on_update()
     end
 end
 
-function on_mouse_wheel(scroll_dir, flags) 
-    local info = active_2d_scope()
-    if info and scroll_dir and (not actor_menu.inventory_opened()) then
+function change_zoom(info, direction, wantClamp)
+    if info then
         local step_count = get_console():get_float("zoom_step_count")
         local step_count_1 = step_count + 1
-
-        local scroll_delta = scroll_dir * 2 - 1
+        local step_mapping = (step_count/step_count_1)
 
         local n = #info.magnifications
 
@@ -248,28 +248,44 @@ function on_mouse_wheel(scroll_dir, flags)
             return cur.l == cur.h
         end
 
-        if scroll_delta > 0 and fixed(info.zoom_cache) then 
-            info.zoom_cache = clamp(info.zoom_cache + 1.0, 1, n + (step_count/(step_count+1)))
+        function clampOrWrap(v, min, max)
+            return wantClamp
+                and clamp(v, min, max)
+                or (v > max and min)
+                or (v < min and max)
+                or v
+        end
+
+        -- For zoom, the integer component selects the magnification index
+        --    and the fractional component maps between the .l and .r values of said index
+        if direction > 0 and fixed(info.zoom_cache) then 
+            info.zoom_cache = clampOrWrap(info.zoom_cache + 1.0, 1, n + step_mapping)
         else 
-            info.zoom_cache = clamp(info.zoom_cache + (scroll_delta / step_count_1), 1, n + (step_count/(step_count+1)))
+            info.zoom_cache = clampOrWrap(info.zoom_cache + (direction / step_count_1), 1, n + step_mapping)
         end
         
         if fixed(info.zoom_cache) then
             info.zoom_cache = math.floor(info.zoom_cache+0.01)
         end
 
-        printf("Zoom changed: " .. czc .. " -> " .. info.zoom_cache)
-        printf("Current mag: " .. current_magnification(info)) 
-
         info.target_mag = current_magnification(info)
         if fixed(info.zoom_cache) or fixed(czc) then
-            info.current_mag = current_magnification(info)
+            -- If swapping to or from a fixed magnification, we want the view to instantly change
+            info.current_mag = info.target_mag
         end
+    end
+end
+
+function on_mouse_wheel(scroll_dir, flags) 
+    local info = active_2d_scope()
+    if info and scroll_dir and (not actor_menu.inventory_opened())then
+        local i = get_console():get_bool("mouse_wheel_invert_zoom") and -1 or 1
+
+        change_zoom(info, i*(scroll_dir*2-1), true)
 
         flags.ret_value = false
     end
 end
-
 local mwheel_supported_ver	= 20230701
 local mwheel_avail 			= MODDED_EXES_VERSION and (MODDED_EXES_VERSION >= mwheel_supported_ver)
 
@@ -326,9 +342,6 @@ function on_game_start()
         local info = active_2d_scope()
         if info then
             print_optic_detail(info)
-
-            info.current_mag = current_magnification(info)
-            info.target_mag  = info.current_mag
 
             actor_on_update()
         end
