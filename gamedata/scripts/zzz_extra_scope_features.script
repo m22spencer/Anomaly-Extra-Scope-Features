@@ -129,7 +129,7 @@ function _active_2d_scope()
         item:iterate_installed_upgrades(function(upgrade) 
             local upgrade_section = ini_sys:r_string_ex(upgrade, "section")
             local ur = f(upgrade_section, isAlt)
-            debug(utils_data.print_table(ur, "upgrade_magnifiction", true))
+            debug(utils_data.print_table(ur, "upgrade_magnification", true))
             if #ur.magnifications == 0 then
                 -- Upgrade does not contain optic information
                 return
