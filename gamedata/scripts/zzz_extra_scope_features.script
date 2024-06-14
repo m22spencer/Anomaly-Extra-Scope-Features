@@ -239,14 +239,19 @@ function actor_on_update()
         local fov_factor = mag_to_fov( player_fov
                                      , remaining_magnification)
 
-        
-
         local zoom_factor  = options.only_zoom_when_rotated
             and weapon:GetInertionAimFactor() > 0.001 and fov_to_zoomfactor(player_fov)
             or fov_to_zoomfactor(fov_factor)
         
-
         weapon:SetZoomFactor(zoom_factor)
+
+        -- Instant zoom outs can result in sampling the players hud, resulting in artifacts
+        --    so delay the magnification change until this is not the case
+        --    higher `scope_factor` will result in more delay
+        local mbf = mag_between_fovs(device().fov * TO_RADIANS, target_fov) < 0.95
+        if mbf and info.last_target_mag then
+            target_fov = mag_to_fov(player_fov, info.last_target_mag)
+        end
 
         local get = z_3d_scopes.get
         local section = item:section()
@@ -298,13 +303,16 @@ function change_zoom(info, direction, wantClamp)
             info.zoom_cache = math.floor(info.zoom_cache+0.01)
         end
 
-        info.target_mag = current_magnification(info)
-        if fixed(info.zoom_cache) or fixed(czc) then
-            -- If swapping to or from a fixed magnification, we want the view to instantly change
-            info.current_mag = info.target_mag
-        end
+        if czc ~= info.zoom_cache then
+            info.last_target_mag = info.target_mag
+            info.target_mag = current_magnification(info)
+            if fixed(info.zoom_cache) or fixed(czc) then
+                -- If swapping to or from a fixed magnification, we want the view to instantly change
+                info.current_mag = info.target_mag
+            end
 
-        debug("Target magnification: %s", info.target_mag)
+            debug("Target magnification: %s", info.target_mag)
+        end
     end
 end
 
