@@ -248,9 +248,11 @@ function actor_on_update()
         -- Instant zoom outs can result in sampling the players hud, resulting in artifacts
         --    so delay the magnification change until this is not the case
         --    higher `scope_factor` will result in more delay
-        local mbf = mag_between_fovs(device().fov * TO_RADIANS, target_fov) < 0.95
-        if mbf and info.last_target_mag then
+        local mbf = mag_between_fovs(device().fov * TO_RADIANS, target_fov) < 0.99
+        if mbf and info.last_target_mag and isFixed(info, info.zoom_cache) then
             target_fov = mag_to_fov(player_fov, info.last_target_mag)
+        elseif mbf then
+            target_fov = device().fov * TO_RADIANS
         end
 
         local get = z_3d_scopes.get
@@ -267,6 +269,11 @@ function actor_on_update()
     end
 end
 
+function isFixed(info, zc)
+    local cur = info.magnifications[math.floor(zc+0.01)]
+    return cur.l == cur.h
+end
+
 -- If wantClamp is false, the zoom will wrap.  Useful to support a "cycle zoom" keybind
 function change_zoom(info, direction, wantClamp)
     if info then
@@ -278,11 +285,6 @@ function change_zoom(info, direction, wantClamp)
 
         local czc = info.zoom_cache
 
-        function fixed(zc)
-            local cur = info.magnifications[math.floor(zc+0.01)]
-            return cur.l == cur.h
-        end
-
         function clampOrWrap(v, min, max)
             return wantClamp
                 and clamp(v, min, max)
@@ -293,20 +295,20 @@ function change_zoom(info, direction, wantClamp)
 
         -- For zoom, the integer component selects the magnification index
         --    and the fractional component maps between the .l and .r values of said index
-        if direction > 0 and fixed(info.zoom_cache) then 
+        if direction > 0 and isFixed(info, info.zoom_cache) then 
             info.zoom_cache = clampOrWrap(info.zoom_cache + 1.0, 1, n + step_mapping)
         else 
             info.zoom_cache = clampOrWrap(info.zoom_cache + (direction / step_count_1), 1, n + step_mapping)
         end
         
-        if fixed(info.zoom_cache) then
+        if isFixed(info, info.zoom_cache) then
             info.zoom_cache = math.floor(info.zoom_cache+0.01)
         end
 
         if czc ~= info.zoom_cache then
             info.last_target_mag = info.target_mag
             info.target_mag = current_magnification(info)
-            if fixed(info.zoom_cache) or fixed(czc) then
+            if isFixed(info, info.zoom_cache) or isFixed(info, czc) then
                 -- If swapping to or from a fixed magnification, we want the view to instantly change
                 info.current_mag = info.target_mag
             end
